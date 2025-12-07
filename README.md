@@ -160,7 +160,8 @@ For licensing inquiries, permissions, or legal matters, please contact:
 
 **3S Holding OÜ**  
 Tartu, Estonia  
-European Union
+European Union  
+📧 **shb@3sholding.com**
 
 ---
 
