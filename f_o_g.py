@@ -1,9 +1,26 @@
 # =============================================================================
-# MANDELBULB HERO — Interactive 3D Fractal Viewer
+# FINGERPRINT OF GOD — Dual 3D Visualization
 # =============================================================================
-# 
-# Real-time ray-marched Mandelbulb with mouse rotation
-# GPU-accelerated rendering using OpenGL shaders
+#
+# Copyright (c) 2025 3S Holding OÜ. All Rights Reserved.
+# Tartu, Estonia, European Union
+#
+# PROPRIETARY AND CONFIDENTIAL
+#
+# This software and its source code are the exclusive property of 3S Holding OÜ.
+# Unauthorized copying, modification, distribution, or use of this software,
+# in whole or in part, is strictly prohibited without the express written
+# permission of 3S Holding OÜ.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED. IN NO EVENT SHALL 3S HOLDING OÜ BE LIABLE FOR ANY CLAIM, DAMAGES
+# OR OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
+#
+# =============================================================================
+#
+# Split-screen interactive viewer featuring:
+#   LEFT:  Ray-marched 3D Mandelbulb fractal
+#   RIGHT: Animated 3D Riemann Zeta function on the critical line
 #
 # Controls:
 #   - Left Mouse Drag: Rotate camera
@@ -14,7 +31,8 @@
 #   - ESC: Quit
 #
 # Designer & Developer: Prof. Shahab Anbarjafari
-# Organization: 3S Holding OÜ
+# Organization: 3S Holding OÜ, Tartu, Estonia
+#
 # =============================================================================
 
 import moderngl
@@ -50,63 +68,52 @@ uniform int iAutoRotate;
 
 out vec4 fragColor;
 
-// =============================================================================
-// CONFIGURATION
-// =============================================================================
-
-#define MAX_STEPS 128
-#define MAX_DIST 50.0
-#define SURF_DIST 0.0008
-#define MANDELBULB_POWER 8.0
-#define MANDELBULB_ITERATIONS 12
+#define PI 3.14159265359
+#define TAU 6.28318530718
 
 // =============================================================================
 // ELEGANT COLOR PALETTES
 // =============================================================================
 
-// Attempt to create smooth, elegant gradients like cosmic auroras
 vec3 palette(float t, vec3 a, vec3 b, vec3 c, vec3 d) {
-    return a + b * cos(6.28318 * (c * t + d));
+    return a + b * cos(TAU * (c * t + d));
 }
 
-// Iridescent cosmic palette - deep teals, magentas, golds
 vec3 cosmicPalette(float t) {
-    vec3 a = vec3(0.5, 0.5, 0.5);
-    vec3 b = vec3(0.5, 0.5, 0.5);
-    vec3 c = vec3(1.0, 1.0, 1.0);
-    vec3 d = vec3(0.00, 0.10, 0.20);  // Teal to gold shift
-    return palette(t, a, b, c, d);
+    return palette(t, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.00, 0.10, 0.20));
 }
 
-// Aurora borealis palette
 vec3 auroraPalette(float t) {
-    vec3 a = vec3(0.5, 0.5, 0.5);
-    vec3 b = vec3(0.5, 0.5, 0.5);
-    vec3 c = vec3(1.0, 1.0, 0.5);
-    vec3 d = vec3(0.80, 0.90, 0.30);  // Green to magenta
-    return palette(t, a, b, c, d);
+    return palette(t, vec3(0.5), vec3(0.5), vec3(1.0, 1.0, 0.5), vec3(0.80, 0.90, 0.30));
 }
 
-// Nebula palette - deep purples and cyans
 vec3 nebulaPalette(float t) {
-    vec3 a = vec3(0.5, 0.5, 0.5);
-    vec3 b = vec3(0.5, 0.5, 0.5);
-    vec3 c = vec3(2.0, 1.0, 0.0);
-    vec3 d = vec3(0.50, 0.20, 0.25);  // Purple to cyan
-    return palette(t, a, b, c, d);
+    return palette(t, vec3(0.5), vec3(0.5), vec3(2.0, 1.0, 0.0), vec3(0.50, 0.20, 0.25));
 }
 
-// Pearlescent/opal palette
 vec3 opalPalette(float t) {
-    vec3 col = vec3(0.0);
-    col += 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.1, 0.2)));
-    col *= 0.5 + 0.5 * cos(6.28318 * (t * 2.0 + vec3(0.3, 0.2, 0.1)));
+    vec3 col = 0.5 + 0.5 * cos(TAU * (t + vec3(0.0, 0.1, 0.2)));
+    col *= 0.5 + 0.5 * cos(TAU * (t * 2.0 + vec3(0.3, 0.2, 0.1)));
     return col;
+}
+
+vec3 zetaPalette(float t) {
+    return palette(t, vec3(0.5), vec3(0.5), vec3(1.0, 0.7, 0.4), vec3(0.0, 0.15, 0.20));
+}
+
+vec3 goldenPalette(float t) {
+    return palette(t, vec3(0.5, 0.4, 0.3), vec3(0.5, 0.4, 0.2), vec3(1.0), vec3(0.0, 0.1, 0.2));
 }
 
 // =============================================================================
 // MANDELBULB DISTANCE ESTIMATOR
 // =============================================================================
+
+#define MB_MAX_STEPS 100
+#define MB_MAX_DIST 40.0
+#define MB_SURF_DIST 0.001
+#define MB_POWER 8.0
+#define MB_ITERATIONS 10
 
 vec3 mandelbulbDE(vec3 pos) {
     vec3 z = pos;
@@ -115,29 +122,22 @@ vec3 mandelbulbDE(vec3 pos) {
     float trap = 1e10;
     float trapY = 0.0;
     
-    float power = MANDELBULB_POWER;
-    
-    for (int i = 0; i < MANDELBULB_ITERATIONS; i++) {
+    for (int i = 0; i < MB_ITERATIONS; i++) {
         r = length(z);
         if (r > 2.0) break;
         
         float theta = acos(z.z / r);
         float phi = atan(z.y, z.x);
         
-        dr = pow(r, power - 1.0) * power * dr + 1.0;
+        dr = pow(r, MB_POWER - 1.0) * MB_POWER * dr + 1.0;
         
-        float zr = pow(r, power);
-        theta *= power;
-        phi *= power;
+        float zr = pow(r, MB_POWER);
+        theta *= MB_POWER;
+        phi *= MB_POWER;
         
-        z = zr * vec3(
-            sin(theta) * cos(phi),
-            sin(theta) * sin(phi),
-            cos(theta)
-        );
+        z = zr * vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
         z += pos;
         
-        // Multiple orbit traps for richer coloring
         float newTrap = length(z);
         if (newTrap < trap) {
             trap = newTrap;
@@ -145,35 +145,173 @@ vec3 mandelbulbDE(vec3 pos) {
         }
     }
     
-    float dist = 0.5 * log(r) * r / dr;
-    return vec3(dist, trap, trapY);
+    return vec3(0.5 * log(r) * r / dr, trap, trapY);
+}
+
+// =============================================================================
+// RIEMANN ZETA FUNCTION (APPROXIMATION)
+// =============================================================================
+
+// Complex multiplication
+vec2 cmul(vec2 a, vec2 b) {
+    return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+// Complex division
+vec2 cdiv(vec2 a, vec2 b) {
+    float denom = dot(b, b);
+    return vec2(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / denom;
+}
+
+// Complex exponential
+vec2 cexp(vec2 z) {
+    return exp(z.x) * vec2(cos(z.y), sin(z.y));
+}
+
+// Complex power: n^(-s) where s = 0.5 + it
+vec2 cpow_inv(float n, vec2 s) {
+    float logn = log(n);
+    // n^(-s) = exp(-s * log(n))
+    vec2 exponent = vec2(-s.x * logn, -s.y * logn);
+    return cexp(exponent);
+}
+
+// Riemann Zeta on critical line: ζ(0.5 + it)
+// Using Dirichlet series with convergence acceleration
+vec2 zeta_critical(float t) {
+    vec2 s = vec2(0.5, t);
+    vec2 sum = vec2(0.0);
+    
+    // Dirichlet eta function (alternating series converges better)
+    // η(s) = Σ(-1)^(n-1) / n^s = (1 - 2^(1-s)) * ζ(s)
+    
+    const int N = 50;
+    float sign = 1.0;
+    
+    for (int n = 1; n <= N; n++) {
+        vec2 term = cpow_inv(float(n), s);
+        sum += sign * term;
+        sign = -sign;
+    }
+    
+    // Convert eta to zeta: ζ(s) = η(s) / (1 - 2^(1-s))
+    vec2 one_minus_s = vec2(0.5, -t);
+    vec2 two_pow = cexp(vec2(log(2.0) * one_minus_s.x, log(2.0) * one_minus_s.y));
+    vec2 denom = vec2(1.0, 0.0) - two_pow;
+    
+    return cdiv(sum, denom);
+}
+
+// =============================================================================
+// 3D ZETA VISUALIZATION - Distance Field
+// =============================================================================
+
+#define ZETA_MAX_STEPS 80
+#define ZETA_MAX_DIST 30.0
+#define ZETA_SURF_DIST 0.015
+
+// Distance to the 3D zeta curve (rendered as a tube/ribbon)
+vec4 zetaCurveDE(vec3 p, float time) {
+    float minDist = 1e10;
+    float colorParam = 0.0;
+    float nearestT = 0.0;
+    vec3 nearestPoint = vec3(0.0);
+    
+    // Sample the zeta function along the critical line
+    // Map 3D space to find closest point on the curve
+    
+    // The curve: (t, Re(ζ), Im(ζ)) scaled and animated
+    float tOffset = time * 2.0;
+    
+    // Search along the curve
+    for (int i = 0; i < 60; i++) {
+        float t = float(i) * 0.8 + tOffset;
+        vec2 z = zeta_critical(t);
+        
+        // 3D position of the curve point
+        // x = imaginary part of input (t), y = Re(zeta), z = Im(zeta)
+        float scale = 0.4;
+        vec3 curvePoint = vec3(
+            (t - tOffset) * 0.1 - 2.0,  // Spread along x
+            z.x * scale,                  // Real part
+            z.y * scale                   // Imaginary part
+        );
+        
+        float d = length(p - curvePoint);
+        if (d < minDist) {
+            minDist = d;
+            colorParam = t * 0.1;
+            nearestT = t;
+            nearestPoint = curvePoint;
+        }
+    }
+    
+    // Tube radius varies with magnitude of zeta (zeros become thin)
+    vec2 zetaVal = zeta_critical(nearestT);
+    float mag = length(zetaVal);
+    float tubeRadius = 0.03 + 0.05 * mag;
+    
+    return vec4(minDist - tubeRadius, colorParam, mag, nearestT);
+}
+
+// Alternative: Zeta as a height field / surface
+float zetaSurfaceDE(vec3 p, float time) {
+    // Domain: xz plane maps to complex plane
+    // Height (y) represents |ζ(s)| or phase
+    
+    float tOffset = time * 0.5;
+    
+    // Map position to complex plane
+    float re = 0.5;  // Critical line
+    float im = p.x * 5.0 + 10.0 + tOffset;  // Imaginary part
+    
+    vec2 z = zeta_critical(im);
+    float mag = length(z);
+    float phase = atan(z.y, z.x);
+    
+    // Surface height based on log magnitude
+    float targetY = log(mag + 0.1) * 0.3;
+    
+    // Distance to surface
+    float surfaceDist = p.y - targetY;
+    
+    // Add some thickness
+    return abs(surfaceDist) - 0.02;
+}
+
+// Combined Zeta 3D scene
+vec4 zetaSceneDE(vec3 p, float time) {
+    // Render both curve and surface
+    vec4 curve = zetaCurveDE(p, time);
+    
+    // Flowing ribbon/surface beneath
+    float surface = zetaSurfaceDE(p - vec3(0.0, -0.8, 0.0), time);
+    
+    if (curve.x < surface) {
+        return curve;
+    } else {
+        return vec4(surface, p.x * 0.2 + time * 0.1, 0.5, 0.0);
+    }
 }
 
 // =============================================================================
 // RAY MARCHING
 // =============================================================================
 
-vec4 rayMarch(vec3 ro, vec3 rd) {
+vec4 rayMarchMandelbulb(vec3 ro, vec3 rd) {
     float d = 0.0;
-    float trap = 0.0;
-    float trapY = 0.0;
+    float trap = 0.0, trapY = 0.0;
     int steps = 0;
     
-    for (int i = 0; i < MAX_STEPS; i++) {
+    for (int i = 0; i < MB_MAX_STEPS; i++) {
         vec3 p = ro + rd * d;
         vec3 result = mandelbulbDE(p);
         float dist = result.x;
         trap = result.y;
         trapY = result.z;
         
-        if (dist < SURF_DIST) {
-            steps = i;
-            break;
-        }
-        if (d > MAX_DIST) {
-            steps = MAX_STEPS;
-            break;
-        }
+        if (dist < MB_SURF_DIST) { steps = i; break; }
+        if (d > MB_MAX_DIST) { steps = MB_MAX_STEPS; break; }
         
         d += dist * 0.6;
         steps = i;
@@ -182,11 +320,39 @@ vec4 rayMarch(vec3 ro, vec3 rd) {
     return vec4(d, trap, trapY, float(steps));
 }
 
+vec4 rayMarchZeta(vec3 ro, vec3 rd, float time) {
+    float d = 0.0;
+    vec4 info = vec4(0.0);
+    int steps = 0;
+    
+    for (int i = 0; i < ZETA_MAX_STEPS; i++) {
+        vec3 p = ro + rd * d;
+        vec4 result = zetaSceneDE(p, time);
+        float dist = result.x;
+        
+        if (dist < ZETA_SURF_DIST) {
+            info = result;
+            steps = i;
+            break;
+        }
+        if (d > ZETA_MAX_DIST) {
+            steps = ZETA_MAX_STEPS;
+            break;
+        }
+        
+        d += dist * 0.8;
+        info = result;
+        steps = i;
+    }
+    
+    return vec4(d, info.y, info.z, float(steps));
+}
+
 // =============================================================================
-// NORMAL & LIGHTING
+// NORMALS
 // =============================================================================
 
-vec3 getNormal(vec3 p) {
+vec3 getMandelbulbNormal(vec3 p) {
     float eps = 0.0001;
     vec2 h = vec2(eps, 0.0);
     return normalize(vec3(
@@ -196,32 +362,40 @@ vec3 getNormal(vec3 p) {
     ));
 }
 
-float ambientOcclusion(vec3 p, vec3 n) {
+vec3 getZetaNormal(vec3 p, float time) {
+    float eps = 0.001;
+    vec2 h = vec2(eps, 0.0);
+    return normalize(vec3(
+        zetaSceneDE(p + h.xyy, time).x - zetaSceneDE(p - h.xyy, time).x,
+        zetaSceneDE(p + h.yxy, time).x - zetaSceneDE(p - h.yxy, time).x,
+        zetaSceneDE(p + h.yyx, time).x - zetaSceneDE(p - h.yyx, time).x
+    ));
+}
+
+// =============================================================================
+// AMBIENT OCCLUSION
+// =============================================================================
+
+float mandelbulbAO(vec3 p, vec3 n) {
     float ao = 0.0;
     float scale = 1.0;
-    
     for (int i = 0; i < 5; i++) {
-        float dist = 0.01 + 0.15 * float(i);
-        float d = mandelbulbDE(p + n * dist).x;
-        ao += (dist - d) * scale;
+        float dist = 0.01 + 0.12 * float(i);
+        ao += (dist - mandelbulbDE(p + n * dist).x) * scale;
         scale *= 0.5;
     }
-    
     return clamp(1.0 - ao * 2.5, 0.0, 1.0);
 }
 
-float softShadow(vec3 ro, vec3 rd, float mint, float maxt, float k) {
-    float res = 1.0;
-    float t = mint;
-    
-    for (int i = 0; i < 32; i++) {
-        float h = mandelbulbDE(ro + rd * t).x;
-        res = min(res, k * h / t);
-        t += clamp(h, 0.01, 0.08);
-        if (h < 0.0005 || t > maxt) break;
+float zetaAO(vec3 p, vec3 n, float time) {
+    float ao = 0.0;
+    float scale = 1.0;
+    for (int i = 0; i < 4; i++) {
+        float dist = 0.02 + 0.15 * float(i);
+        ao += (dist - zetaSceneDE(p + n * dist, time).x) * scale;
+        scale *= 0.5;
     }
-    
-    return clamp(res, 0.0, 1.0);
+    return clamp(1.0 - ao * 2.0, 0.0, 1.0);
 }
 
 // =============================================================================
@@ -237,199 +411,213 @@ mat3 setCamera(vec3 ro, vec3 ta, float cr) {
 }
 
 // =============================================================================
-// MAIN RENDER
+// RENDER MANDELBULB (LEFT SIDE)
 // =============================================================================
 
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
-    
-    // Camera control
-    vec2 mouse = iMouse / iResolution;
-    
-    float angle, elevation;
-    if (iAutoRotate == 1) {
-        angle = iTime * 0.25;
-        elevation = 0.25 + sin(iTime * 0.15) * 0.2;
-    } else {
-        angle = mouse.x * 6.283185;
-        elevation = (mouse.y - 0.5) * 3.14159 * 0.9;
-    }
-    
-    float radius = iZoom;
-    
+vec3 renderMandelbulb(vec2 uv, float angle, float elevation, float zoom) {
     vec3 ro = vec3(
-        radius * cos(angle) * cos(elevation),
-        radius * sin(elevation),
-        radius * sin(angle) * cos(elevation)
+        zoom * cos(angle) * cos(elevation),
+        zoom * sin(elevation),
+        zoom * sin(angle) * cos(elevation)
     );
-    vec3 ta = vec3(0.0, 0.0, 0.0);
-    
+    vec3 ta = vec3(0.0);
     mat3 ca = setCamera(ro, ta, 0.0);
     vec3 rd = ca * normalize(vec3(uv, 1.8));
     
-    // Ray march
-    vec4 result = rayMarch(ro, rd);
+    vec4 result = rayMarchMandelbulb(ro, rd);
     float d = result.x;
     float trap = result.y;
     float trapY = result.z;
     float steps = result.w;
     
-    // =========================================================================
-    // ELEGANT NEBULA BACKGROUND
-    // =========================================================================
+    // Background
+    vec3 col = mix(vec3(0.01, 0.01, 0.03), vec3(0.04, 0.02, 0.08), uv.y * 0.5 + 0.5);
     
-    // Multi-layered nebula gradient
-    vec3 col = vec3(0.0);
-    
-    // Base deep space
-    col = mix(vec3(0.01, 0.01, 0.02), vec3(0.02, 0.01, 0.04), uv.y * 0.5 + 0.5);
-    
-    // Nebula clouds
-    float nebula1 = sin(uv.x * 3.0 + iTime * 0.1) * cos(uv.y * 2.0 - iTime * 0.05);
-    float nebula2 = cos(uv.x * 5.0 - iTime * 0.08) * sin(uv.y * 4.0 + iTime * 0.12);
-    col += vec3(0.05, 0.02, 0.08) * (nebula1 * 0.5 + 0.5) * 0.3;
-    col += vec3(0.02, 0.04, 0.08) * (nebula2 * 0.5 + 0.5) * 0.2;
-    
-    // Subtle star field
-    vec2 starUV = floor(uv * 300.0);
+    // Stars
+    vec2 starUV = floor(uv * 200.0);
     float star = fract(sin(dot(starUV, vec2(12.9898, 78.233))) * 43758.5453);
-    star = smoothstep(0.98, 1.0, star);
-    col += star * vec3(0.8, 0.9, 1.0) * 0.4;
+    col += smoothstep(0.98, 1.0, star) * 0.3;
     
-    // Distant galaxy glow
-    float galaxyDist = length(uv - vec2(0.3, 0.2));
-    col += vec3(0.1, 0.05, 0.15) * exp(-galaxyDist * 4.0) * 0.5;
-    
-    // =========================================================================
-    // SURFACE RENDERING
-    // =========================================================================
-    
-    if (d < MAX_DIST) {
+    if (d < MB_MAX_DIST) {
         vec3 p = ro + rd * d;
-        vec3 n = getNormal(p);
-        vec3 viewDir = -rd;
+        vec3 n = getMandelbulbNormal(p);
+        vec3 v = -rd;
         
-        // ----- ELEGANT MULTI-LIGHT SETUP -----
+        // Lighting
+        vec3 l1 = normalize(vec3(0.6, 0.8, -0.4));
+        vec3 l2 = normalize(vec3(-0.7, 0.3, 0.6));
         
-        // Key light - warm golden
-        vec3 lightDir1 = normalize(vec3(0.6, 0.8, -0.4));
-        vec3 lightCol1 = vec3(1.0, 0.9, 0.7) * 1.2;
+        float diff1 = max(dot(n, l1), 0.0);
+        float diff2 = max(dot(n, l2), 0.0);
+        float spec = pow(max(dot(n, normalize(l1 + v)), 0.0), 64.0);
+        float ao = mandelbulbAO(p, n);
         
-        // Fill light - cool cyan
-        vec3 lightDir2 = normalize(vec3(-0.7, 0.3, 0.6));
-        vec3 lightCol2 = vec3(0.4, 0.7, 1.0) * 0.8;
+        // Colors
+        float cf1 = trap * 1.2;
+        float cf2 = trapY * 0.8 + 0.5;
+        float fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0);
         
-        // Rim light - magenta accent
-        vec3 lightDir3 = normalize(vec3(0.0, -0.5, -0.8));
-        vec3 lightCol3 = vec3(1.0, 0.3, 0.6) * 0.6;
+        vec3 col1 = cosmicPalette(cf1 + iTime * 0.02);
+        vec3 col2 = nebulaPalette(cf2);
+        vec3 baseColor = mix(col1, col2, smoothstep(0.3, 0.7, cf1));
+        baseColor = mix(baseColor, opalPalette(dot(n, v) * 2.0 + trap), fresnel * 0.3);
         
-        // Diffuse
-        float diff1 = max(dot(n, lightDir1), 0.0);
-        float diff2 = max(dot(n, lightDir2), 0.0);
-        float diff3 = max(dot(n, lightDir3), 0.0);
+        col = baseColor * (0.1 + diff1 * vec3(1.0, 0.9, 0.7) * 0.6 + diff2 * vec3(0.4, 0.6, 1.0) * 0.3) * ao;
+        col += spec * 0.4;
+        col += fresnel * vec3(0.3, 0.4, 0.8) * 0.4;
         
-        // Specular (Blinn-Phong)
-        vec3 h1 = normalize(lightDir1 + viewDir);
-        vec3 h2 = normalize(lightDir2 + viewDir);
-        float spec1 = pow(max(dot(n, h1), 0.0), 64.0);
-        float spec2 = pow(max(dot(n, h2), 0.0), 32.0);
-        
-        // AO and shadows
-        float ao = ambientOcclusion(p, n);
-        float shadow = softShadow(p + n * 0.01, lightDir1, 0.02, 5.0, 16.0);
-        
-        // ----- IRIDESCENT COLOR CALCULATION -----
-        
-        // Multiple factors for rich, varied coloring
-        float colorFactor1 = trap * 1.2;
-        float colorFactor2 = trapY * 0.8 + 0.5;
-        float colorFactor3 = length(p.xz) * 0.3;
-        float colorFactor4 = p.y * 0.5 + 0.5;
-        
-        // Blend multiple palettes for iridescent effect
-        vec3 col1 = cosmicPalette(colorFactor1 + iTime * 0.02);
-        vec3 col2 = nebulaPalette(colorFactor2 - iTime * 0.015);
-        vec3 col3 = auroraPalette(colorFactor3 + colorFactor4);
-        
-        // Fresnel-based palette blending (view-dependent iridescence)
-        float fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
-        
-        // Blend colors based on surface properties
-        vec3 baseColor = mix(col1, col2, smoothstep(0.3, 0.7, colorFactor1));
-        baseColor = mix(baseColor, col3, fresnel * 0.5);
-        
-        // Add pearlescent sheen
-        vec3 pearlShift = opalPalette(dot(n, viewDir) * 2.0 + trap);
-        baseColor = mix(baseColor, pearlShift, fresnel * 0.3);
-        
-        // Desaturate slightly in shadows for elegance
-        float luma = dot(baseColor, vec3(0.299, 0.587, 0.114));
-        baseColor = mix(vec3(luma), baseColor, 0.7 + shadow * 0.3);
-        
-        // ----- FINAL LIGHTING COMPOSITION -----
-        
-        // Ambient (subtle, tinted)
-        vec3 ambient = vec3(0.08, 0.06, 0.12) * ao;
-        
-        // Diffuse contribution
-        vec3 diffuse = vec3(0.0);
-        diffuse += diff1 * lightCol1 * shadow;
-        diffuse += diff2 * lightCol2 * 0.6;
-        diffuse += diff3 * lightCol3 * 0.4;
-        
-        // Combine
-        col = baseColor * (ambient + diffuse * ao);
-        
-        // Specular highlights (colored)
-        col += spec1 * lightCol1 * shadow * 0.5;
-        col += spec2 * lightCol2 * 0.25;
-        
-        // Elegant rim lighting
-        float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 4.0);
-        vec3 rimColor = mix(vec3(0.3, 0.5, 0.9), vec3(0.9, 0.4, 0.7), sin(trap * 5.0) * 0.5 + 0.5);
-        col += rim * rimColor * 0.5;
-        
-        // Subsurface scattering (warm inner glow)
-        float sss = pow(max(dot(viewDir, -lightDir1), 0.0), 2.0);
-        col += sss * baseColor * vec3(1.2, 0.8, 0.6) * 0.15;
-        
-        // Depth-based color shift (atmospheric perspective)
-        float depthFade = 1.0 - exp(-d * 0.06);
-        vec3 atmosphereColor = vec3(0.15, 0.1, 0.25);
-        col = mix(col, atmosphereColor, depthFade * 0.6);
-        
-        // Subtle glow from ray march complexity
-        float complexity = steps / float(MAX_STEPS);
-        col += vec3(0.1, 0.05, 0.15) * complexity * 0.4;
+        // Fog
+        col = mix(vec3(0.02, 0.02, 0.05), col, exp(-d * 0.08));
     }
     
-    // =========================================================================
-    // CINEMATIC POST-PROCESSING
-    // =========================================================================
+    return col;
+}
+
+// =============================================================================
+// RENDER RIEMANN ZETA (RIGHT SIDE)
+// =============================================================================
+
+vec3 renderZeta(vec2 uv, float angle, float elevation, float zoom, float time) {
+    vec3 ro = vec3(
+        zoom * 1.5 * cos(angle) * cos(elevation),
+        zoom * 0.8 * sin(elevation) + 0.3,
+        zoom * 1.5 * sin(angle) * cos(elevation)
+    );
+    vec3 ta = vec3(0.0, 0.0, 0.0);
+    mat3 ca = setCamera(ro, ta, 0.0);
+    vec3 rd = ca * normalize(vec3(uv, 1.5));
     
-    // Subtle chromatic aberration at edges
-    float chromaDist = length(uv) * 0.02;
-    col.r *= 1.0 + chromaDist;
-    col.b *= 1.0 - chromaDist * 0.5;
+    vec4 result = rayMarchZeta(ro, rd, time);
+    float d = result.x;
+    float colorParam = result.y;
+    float mag = result.z;
+    float steps = result.w;
     
-    // Elegant vignette
-    float vignette = 1.0 - 0.4 * pow(length(uv * 0.75), 2.5);
+    // Deep space background with golden tint
+    vec3 col = mix(vec3(0.02, 0.01, 0.01), vec3(0.06, 0.03, 0.08), uv.y * 0.5 + 0.5);
+    
+    // Nebula effect
+    float neb = sin(uv.x * 4.0 + time * 0.2) * cos(uv.y * 3.0);
+    col += vec3(0.04, 0.02, 0.06) * (neb * 0.5 + 0.5) * 0.3;
+    
+    // Stars
+    vec2 starUV = floor(uv * 150.0);
+    float star = fract(sin(dot(starUV, vec2(12.9898, 78.233))) * 43758.5453);
+    col += smoothstep(0.97, 1.0, star) * vec3(1.0, 0.9, 0.7) * 0.4;
+    
+    if (d < ZETA_MAX_DIST) {
+        vec3 p = ro + rd * d;
+        vec3 n = getZetaNormal(p, time);
+        vec3 v = -rd;
+        
+        // Elegant lighting
+        vec3 l1 = normalize(vec3(0.5, 1.0, -0.3));
+        vec3 l2 = normalize(vec3(-0.6, 0.2, 0.7));
+        vec3 l3 = normalize(vec3(0.0, -1.0, 0.0));
+        
+        float diff1 = max(dot(n, l1), 0.0);
+        float diff2 = max(dot(n, l2), 0.0);
+        float spec1 = pow(max(dot(n, normalize(l1 + v)), 0.0), 48.0);
+        float spec2 = pow(max(dot(n, normalize(l2 + v)), 0.0), 32.0);
+        float ao = zetaAO(p, n, time);
+        
+        // Golden/bronze palette for zeta
+        vec3 baseColor = zetaPalette(colorParam);
+        vec3 goldAccent = goldenPalette(colorParam * 0.5 + mag);
+        
+        // Zeros glow special color (where mag is low)
+        float zeroGlow = exp(-mag * 5.0);
+        vec3 zeroColor = vec3(1.0, 0.3, 0.1);  // Bright orange-red at zeros
+        baseColor = mix(baseColor, zeroColor, zeroGlow * 0.8);
+        
+        // Iridescence
+        float fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0);
+        baseColor = mix(baseColor, goldAccent, fresnel * 0.4);
+        
+        // Combine lighting
+        vec3 ambient = vec3(0.08, 0.06, 0.04);
+        col = baseColor * (ambient + 
+            diff1 * vec3(1.0, 0.85, 0.6) * 0.7 + 
+            diff2 * vec3(0.5, 0.6, 1.0) * 0.4) * ao;
+        
+        // Specular
+        col += spec1 * vec3(1.0, 0.9, 0.7) * 0.5;
+        col += spec2 * vec3(0.6, 0.7, 1.0) * 0.3;
+        
+        // Rim light
+        col += fresnel * vec3(0.8, 0.5, 0.2) * 0.4;
+        
+        // Extra glow at zeros
+        col += zeroGlow * zeroColor * 0.5;
+        
+        // Fog
+        col = mix(vec3(0.03, 0.02, 0.04), col, exp(-d * 0.1));
+        
+        // Glow from complexity
+        col += vec3(0.08, 0.05, 0.02) * (steps / float(ZETA_MAX_STEPS)) * 0.3;
+    }
+    
+    return col;
+}
+
+// =============================================================================
+// MAIN
+// =============================================================================
+
+void main() {
+    vec2 fragCoordNorm = gl_FragCoord.xy / iResolution.xy;
+    
+    // Camera control
+    vec2 mouse = iMouse / iResolution;
+    float angle, elevation;
+    
+    if (iAutoRotate == 1) {
+        angle = iTime * 0.2;
+        elevation = 0.25 + sin(iTime * 0.12) * 0.15;
+    } else {
+        angle = mouse.x * TAU;
+        elevation = (mouse.y - 0.5) * PI * 0.9;
+    }
+    
+    float zoom = iZoom;
+    vec3 col;
+    
+    // Divider position (center)
+    float divider = 0.5;
+    float dividerWidth = 0.003;
+    
+    if (fragCoordNorm.x < divider - dividerWidth) {
+        // LEFT SIDE: Mandelbulb
+        vec2 uv = (gl_FragCoord.xy - vec2(iResolution.x * 0.25, iResolution.y * 0.5)) / iResolution.y * 2.0;
+        col = renderMandelbulb(uv, angle, elevation, zoom);
+        
+    } else if (fragCoordNorm.x > divider + dividerWidth) {
+        // RIGHT SIDE: Riemann Zeta
+        vec2 uv = (gl_FragCoord.xy - vec2(iResolution.x * 0.75, iResolution.y * 0.5)) / iResolution.y * 2.0;
+        col = renderZeta(uv, angle * 0.7 + 0.5, elevation * 0.8, zoom * 0.8, iTime);
+        
+    } else {
+        // DIVIDER: Elegant golden line
+        float glow = exp(-abs(fragCoordNorm.x - divider) * 500.0);
+        col = vec3(0.8, 0.6, 0.2) * glow;
+        col += vec3(1.0, 0.9, 0.7) * glow * glow;
+    }
+    
+    // === POST-PROCESSING ===
+    
+    // Vignette
+    vec2 uvScreen = fragCoordNorm - 0.5;
+    float vignette = 1.0 - 0.3 * dot(uvScreen, uvScreen);
     col *= vignette;
     
-    // Soft bloom on bright areas
-    float luminance = dot(col, vec3(0.299, 0.587, 0.114));
-    float bloom = smoothstep(0.5, 1.0, luminance);
-    col += col * bloom * 0.15;
-    
-    // Subtle film grain for organic feel
+    // Subtle film grain
     float grain = fract(sin(dot(gl_FragCoord.xy + iTime, vec2(12.9898, 78.233))) * 43758.5453);
-    col += (grain - 0.5) * 0.015;
+    col += (grain - 0.5) * 0.01;
     
-    // Color grading - lift shadows, subtle teal/orange
-    col = pow(col, vec3(0.95));  // Lift
-    col = mix(col, col * vec3(1.05, 0.98, 0.95), 0.3);  // Warm highlights
+    // Color grading
+    col = pow(col, vec3(0.95));
     
-    // Gamma correction
+    // Gamma
     col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
     
     fragColor = vec4(col, 1.0);
@@ -442,7 +630,7 @@ void main() {
 # =============================================================================
 
 class MandelbulbViewer:
-    def __init__(self, width=1280, height=720):
+    def __init__(self, width=1440, height=810):
         self.width = width
         self.height = height
         self.running = True
@@ -457,7 +645,7 @@ class MandelbulbViewer:
         
         # Initialize Pygame
         pygame.init()
-        pygame.display.set_caption("Mandelbulb Hero — Prof. Shahab Anbarjafari | 3S Holding OÜ")
+        pygame.display.set_caption("Fingerprint of God — Mandelbulb & Riemann Zeta | Prof. Shahab Anbarjafari | 3S Holding OÜ")
         
         # Request OpenGL 3.3 core profile
         pygame.display.gl_set_attribute(pygame.GL_CONTEXT_MAJOR_VERSION, 3)
@@ -506,24 +694,26 @@ class MandelbulbViewer:
         self.clock = pygame.time.Clock()
         self.start_time = pygame.time.get_ticks()
         
-        # Font for UI
-        self.font = pygame.font.Font(None, 24)
-        
-        print("\n" + "="*60)
-        print("  MANDELBULB HERO — Interactive 3D Fractal")
-        print("="*60)
-        print("  Designer: Prof. Shahab Anbarjafari")
-        print("  Organization: 3S Holding OÜ")
-        print("="*60)
+        print("\n" + "="*70)
+        print("  ╔════════════════════════════════════════════════════════════════╗")
+        print("  ║          FINGERPRINT OF GOD — Dual 3D Visualization           ║")
+        print("  ╠════════════════════════════════════════════════════════════════╣")
+        print("  ║  LEFT:  Mandelbulb Fractal (Biomechanical Temple)              ║")
+        print("  ║  RIGHT: Riemann Zeta ζ(½+it) (Fingerprint of God)              ║")
+        print("  ╠════════════════════════════════════════════════════════════════╣")
+        print("  ║  Designer & Developer: Prof. Shahab Anbarjafari                ║")
+        print("  ║  Organization: 3S Holding OÜ                                   ║")
+        print("  ╚════════════════════════════════════════════════════════════════╝")
+        print("="*70)
         print("\n  Controls:")
-        print("    Left Mouse Drag : Rotate camera")
+        print("    Left Mouse Drag : Rotate both views")
         print("    Scroll Wheel    : Zoom in/out")
         print("    Space           : Toggle auto-rotation")
         print("    S               : Save screenshot")
         print("    R               : Reset camera")
         print("    ESC             : Quit")
-        print("\n  Generating Mandelbulb in real-time...")
-        print("="*60 + "\n")
+        print("\n  Rendering in real-time...")
+        print("="*70 + "\n")
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -543,21 +733,20 @@ class MandelbulbViewer:
                     self.reset_camera()
                     
             elif event.type == MOUSEBUTTONDOWN:
-                if event.button == 1:  # Left click
+                if event.button == 1:
                     self.dragging = True
                     self.last_mouse_pos = event.pos
                     if self.auto_rotate:
                         self.auto_rotate = False
                         self.u_auto_rotate.value = 0
-                        # Initialize mouse position from current auto-rotate angle
                         t = (pygame.time.get_ticks() - self.start_time) / 1000.0
-                        self.mouse_x = (t * 0.3 / 6.283185) * self.width
-                        self.mouse_y = (0.3 + np.sin(t * 0.2) * 0.2 + 0.5) * self.height
-                elif event.button == 4:  # Scroll up
-                    self.zoom = max(1.5, self.zoom - 0.2)
+                        self.mouse_x = (t * 0.2 / 6.283185) * self.width
+                        self.mouse_y = (0.25 + np.sin(t * 0.12) * 0.15 + 0.5) * self.height
+                elif event.button == 4:
+                    self.zoom = max(1.5, self.zoom - 0.15)
                     self.u_zoom.value = self.zoom
-                elif event.button == 5:  # Scroll down
-                    self.zoom = min(8.0, self.zoom + 0.2)
+                elif event.button == 5:
+                    self.zoom = min(6.0, self.zoom + 0.15)
                     self.u_zoom.value = self.zoom
                     
             elif event.type == MOUSEBUTTONUP:
@@ -591,36 +780,30 @@ class MandelbulbViewer:
         if not os.path.exists("output"):
             os.makedirs("output")
         
-        # Read pixels from framebuffer
         data = self.ctx.screen.read(components=3)
         img = pygame.image.fromstring(data, (self.width, self.height), 'RGB')
         img = pygame.transform.flip(img, False, True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"output/Mandelbulb_Hero_{timestamp}.png"
+        filename = f"output/Fingerprint_of_God_{timestamp}.png"
         pygame.image.save(img, filename)
         print(f"  ✓ Screenshot saved: {filename}")
     
     def render(self):
-        # Update time
         current_time = (pygame.time.get_ticks() - self.start_time) / 1000.0
         self.u_time.value = current_time
-        
-        # Update mouse position
         self.u_mouse.value = (self.mouse_x, self.mouse_y)
         
-        # Clear and render
         self.ctx.clear(0.0, 0.0, 0.0)
         self.vao.render(moderngl.TRIANGLE_STRIP)
         
-        # Swap buffers
         pygame.display.flip()
     
     def run(self):
         while self.running:
             self.handle_events()
             self.render()
-            self.clock.tick(60)  # 60 FPS cap
+            self.clock.tick(60)
         
         pygame.quit()
         print("\n  Goodbye! 🌌\n")
@@ -632,15 +815,15 @@ class MandelbulbViewer:
 
 def main():
     print("\n" + "="*70)
-    print("  ╔═══════════════════════════════════════════════════════════════╗")
-    print("  ║              MANDELBULB HERO — 3D Fractal Viewer             ║")
-    print("  ╠═══════════════════════════════════════════════════════════════╣")
-    print("  ║  Designer & Developer: Prof. Shahab Anbarjafari              ║")
-    print("  ║  Organization: 3S Holding OÜ                                  ║")
-    print("  ╚═══════════════════════════════════════════════════════════════╝")
+    print("  ╔════════════════════════════════════════════════════════════════╗")
+    print("  ║              FINGERPRINT OF GOD — 3D Visualization             ║")
+    print("  ╠════════════════════════════════════════════════════════════════╣")
+    print("  ║  Designer & Developer: Prof. Shahab Anbarjafari                ║")
+    print("  ║  Organization: 3S Holding OÜ                                   ║")
+    print("  ╚════════════════════════════════════════════════════════════════╝")
     print("="*70)
     
-    viewer = MandelbulbViewer(1280, 720)
+    viewer = MandelbulbViewer(1440, 810)
     viewer.run()
 
 
